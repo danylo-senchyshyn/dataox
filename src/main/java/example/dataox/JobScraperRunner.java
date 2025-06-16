@@ -3,20 +3,18 @@ package example.dataox;
 import example.dataox.service.JobScraperService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-@SpringBootApplication
-@RequiredArgsConstructor
-public class DataoxApplication implements CommandLineRunner {
+@Component
+public class JobScraperRunner implements CommandLineRunner {
 
     private final JobScraperService jobScraperService;
 
-    public static void main(String[] args) {
-        SpringApplication.run(DataoxApplication.class, args);
+    public JobScraperRunner(JobScraperService jobScraperService) {
+        this.jobScraperService = jobScraperService;
     }
 
     @Override
