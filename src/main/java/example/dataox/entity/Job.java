@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.Date;
+
 @Getter
 @Setter
 @Entity
@@ -13,30 +15,30 @@ public class Job {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "jobPageUrl", nullable = false)
+    @Column(name = "jobPageUrl")
     private String jobPageUrl;
 
-    @Column(name = "positionName", nullable = false)
+    @Column(name = "positionName")
     private String positionName;
 
-    @Column(name = "organizationUrl", nullable = false)
+    @Column(name = "organizationUrl")
     private String organizationUrl;
 
     @Column(name = "logoUrl")
     private String logoUrl;
 
-    @Column(name = "organizationTitle", nullable = false)
+    @Column(name = "organizationTitle")
     private String organizationTitle;
 
-    @Column(name = "laborFunction", nullable = false)
+    @Column(name = "laborFunction")
     private String laborFunction;
 
-    @Column(name = "location", nullable = false)
+    @Column(name = "location")
     private String location;
 
-    @Column(name = "postedDate", nullable = false)
-    private Long postedDate;
+    @Column(name = "postedDate")
+    private Date postedDate;
 
-    @Column(name = "description", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 }

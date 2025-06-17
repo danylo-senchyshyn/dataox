@@ -8,164 +8,299 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.openqa.selenium.*;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class JobScraperService {
 
     private final JobRepository jobRepository;
+    private final JobSaveService jobSaveService;
     private static final String BASE_URL = "https://jobs.techstars.com";
 
     @Transactional
     public void scrapeAllJobs(Map<String, String> jobFunctionsAndUrls) {
-        jobFunctionsAndUrls.forEach((jobFunction, url) -> {
+        for (Map.Entry<String, String> entry : jobFunctionsAndUrls.entrySet()) {
             try {
-                scrapeJobsFromUrl(url, jobFunction);
-            } catch (IOException e) {
-                System.out.println("Ошибка при парсинге функции: " + jobFunction);
+                scrapeJobsFromUrl(entry.getValue(), entry.getKey());
+            } catch (Exception e) {
+                System.out.println("Ошибка при парсинге функции: " + entry.getKey());
                 e.printStackTrace();
             }
-        });
+        }
     }
 
-    public void scrapeJobsFromUrl(String url, String jobFunction) throws IOException {
-        System.out.println("Запускаем парсинг URL: " + url + " для функции: " + jobFunction);
+    public void scrapeJobsFromUrl(String url, String jobFunction) {
+        System.err.println("Начинаем парсинг направления: " + jobFunction);
 
-        Document doc = Jsoup.connect(url)
-                .userAgent("Mozilla/5.0")
-                .timeout(15_000)
-                .get();
+        ChromeOptions options = new ChromeOptions();
+        // Устанавливаем User-Agent как у обычного браузера (пример для Chrome)
+        options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/114.0.0.0 Safari/537.36");
 
-        // Пытаемся получить количество найденных вакансий
-        Element totalJobsElement = doc.selectFirst("div.sc-beqWaB.eJrfpP");
-        if (totalJobsElement != null) {
-            String text = totalJobsElement.text(); // "Showing 95 jobs"
-            String numberStr = text.replaceAll("\\D+", "");
-            try {
-                int totalJobs = Integer.parseInt(numberStr);
-                System.out.println("Всего найдено вакансий: " + totalJobs);
-            } catch (NumberFormatException e) {
-                System.out.println("Не удалось распарсить количество вакансий: " + text);
-            }
-        }
+        // Запускаем без headless (если хочешь, можно включить, но сейчас лучше выключить)
+        options.addArguments("--headless=new");
 
-        // Парсим карточки вакансий
-        Elements jobCards = doc.select("div[itemtype='https://schema.org/JobPosting']");
-        System.out.println("Найдено карточек вакансий: " + jobCards.size());
+        // Отключаем GPU и Sandbox (если нужно)
+        options.addArguments("--disable-gpu", "--no-sandbox");
 
+        WebDriver driver = new ChromeDriver(options);
+        WebDriverWait wait = new WebDriverWait(driver, java.time.Duration.ofSeconds(10));
         List<Job> jobs = new ArrayList<>();
 
-        for (Element jobCard : jobCards) {
-            Element linkElem = jobCard.selectFirst("a[href*='/jobs/']");
-            if (linkElem == null) continue;
-
-            String jobPagePath = linkElem.attr("href");
-            String jobPageUrl = jobPagePath.startsWith("http") ? jobPagePath : BASE_URL + jobPagePath;
-
-            try {
-                Job job = parseJobDetailPage(jobPageUrl);
-                job.setLaborFunction(jobFunction); // устанавливаем вручную
-                if (job.getJobPageUrl() == null || job.getJobPageUrl().isEmpty()) continue;
-                jobs.add(job);
-            } catch (Exception e) {
-                System.out.println("Ошибка при парсинге страницы вакансии: " + jobPageUrl);
-                e.printStackTrace();
-            }
-        }
-
-        System.out.println("Сохраняем " + jobs.size() + " вакансий для функции: " + jobFunction);
-
         try {
-            jobRepository.saveAll(jobs);
+            driver.manage().timeouts().implicitlyWait(java.time.Duration.ofSeconds(5));
+            driver.get(url);
+
+            int expectedJobCount = 0;
+            try {
+                WebElement showingJobsElement = driver.findElement(By.cssSelector("div.sc-beqWaB.eJrfpP"));
+                String showingText = showingJobsElement.getText();
+                System.err.println("Текст с количеством вакансий: " + showingText);
+
+                Matcher matcher = java.util.regex.Pattern.compile("(\\d+)\\s+jobs").matcher(showingText);
+                if (matcher.find()) {
+                    expectedJobCount = Integer.parseInt(matcher.group(1));
+                    System.out.println("Ожидаемое количество вакансий: " + expectedJobCount);
+                } else {
+                    System.out.println("Не удалось извлечь количество из текста: " + showingText);
+                }
+
+            } catch (NoSuchElementException e) {
+                System.out.println("Элемент с количеством вакансий не найден");
+            }
+
+            while (true) {
+                List<WebElement> jobCards = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']"));
+                int currentCount = jobCards.size();
+
+                if (expectedJobCount > 0 && currentCount >= expectedJobCount) {
+                    break;
+                }
+
+                try {
+                    WebElement loadMoreButton = driver.findElement(By.cssSelector("button[data-testid='load-more']"));
+                    String loading = loadMoreButton.getAttribute("data-loading");
+
+                    if ("false".equals(loading)) {
+                        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", loadMoreButton);
+                        loadMoreButton.click();
+                        Thread.sleep(3000);
+                        while (expectedJobCount != currentCount) {
+                            jobCards = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']"));
+                            currentCount = jobCards.size();
+                            ((JavascriptExecutor) driver).executeScript("window.scrollTo(0, document.body.scrollHeight);");
+                            System.err.println(currentCount);
+                            Thread.sleep(1500);
+                        }
+                    } else {
+                        Thread.sleep(1000);
+                    }
+                } catch (NoSuchElementException e) {
+                    System.out.println("Кнопка 'Load more' не найдена — возможно, всё загружено.");
+                    break;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            List<WebElement> finalJobCards = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']"));
+            System.out.println("Итоговое количество карточек: " + finalJobCards.size());
+
+            // Собираем ссылки на вакансии
+            List<WebElement> jobCards = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']"));
+            List<String> jobUrls = new ArrayList<>();
+            for (WebElement jobCard : jobCards) {
+                try {
+                    // Ищем ссылку на вакансию по data-testid внутри карточки
+                    WebElement link = jobCard.findElement(By.cssSelector("a[data-testid='job-title-link']"));
+                    String jobUrl = link.getAttribute("href");
+                    if (jobUrl != null && !jobUrl.isEmpty()) {
+                        jobUrls.add(jobUrl);
+                    } else {
+                        System.out.println("Ссылка пуста, пропускаем карточку.");
+                    }
+                } catch (NoSuchElementException e) {
+                    System.out.println("Карточка не содержит ссылку на вакансию, пропускаем.");
+                    System.out.println("Текст карточки: " + jobCard.getText().substring(0, Math.min(jobCard.getText().length(), 100)) + "...");
+                }
+            }
+
+            // Парсим каждую вакансию по отдельности
+            //for (String jobUrl : jobUrls) {
+            for (int i = 0; i < 1 && i < jobUrls.size(); i++) {
+                String jobUrl = jobUrls.get(i); //
+                try {
+                    driver.get(jobUrl);
+                    wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("h2.jqWDOR")));
+                    Thread.sleep(1000);
+
+                    Job job = parseJobDetailPage(jobUrl, driver);
+                    if (job != null) {
+                        jobs.add(job);
+                        jobSaveService.saveJob(job);
+                    }
+                } catch (Exception ex) {
+                    System.out.println("Ошибка при парсинге вакансии: " + jobUrl);
+                }
+            }
             jobRepository.flush();
-            System.out.println("Сохранено успешно");
+
         } catch (Exception e) {
-            System.out.println("Ошибка при сохранении:");
             e.printStackTrace();
+        } finally {
+            driver.quit();
         }
     }
 
-    private Job parseJobDetailPage(String jobPageUrl) throws IOException {
-        Document jobDoc = Jsoup.connect(jobPageUrl)
-                .userAgent("Mozilla/5.0")
-                .timeout(10_000)
-                .get();
-
+    private Job parseJobDetailPage(String jobPageUrl, WebDriver driver) {
+        System.out.println("Парсим вакансию по URL: " + jobPageUrl);
         Job job = new Job();
-        job.setJobPageUrl(jobPageUrl); // Обязательное поле
+        job.setJobPageUrl(jobPageUrl);
+        driver.get(jobPageUrl);
 
-        // 1 position name
-        Element name = jobDoc.selectFirst("div[class=jqWDOR]");
-        job.setPositionName(name != null ? name.text() : "Unknown Position");
-        System.out.println("Парсим вакансию: " + job.getPositionName() + " по URL: " + jobPageUrl);
-
-        // 2 url to organization
-        Element orgLink = jobDoc.selectFirst("a.bpnNuw");
-        String href = orgLink.attr("href");
-        job.setOrganizationUrl((href != null && !href.isEmpty())
-                ? (href.startsWith("http") ? href : BASE_URL + href)
-                : "");
-        job.setOrganizationTitle(orgLink.text());
-        System.out.println("Организация: " + job.getOrganizationTitle() + ", URL: " + job.getOrganizationUrl());
-
-        // 3 logo
-        Element logo = jobDoc.selectFirst("img[class=sc-dmqHEX eTCoCQ]");
-        job.setLogoUrl(logo != null ? logo.attr("src") : "");
-        System.out.println("Логотип: " + job.getLogoUrl());
-
-        // 4 organization title
-        Element title = jobDoc.selectFirst("p[class=sc-beqWaB bpXRKw]");
-        job.setOrganizationTitle(title != null ? title.text() : "");
-        System.out.println("Название организации: " + job.getOrganizationTitle());
-
-        // 5 labor function
-        Elements infoBlocks = jobDoc.select("div[class=sc-beqWaB bpXRKw]");
-        System.out.println("Найдено блоков информации: " + infoBlocks.size());
-        if (infoBlocks.size() > 4) {
-            Element third = infoBlocks.get(3);  // laborFunction
-            Element fourth = infoBlocks.get(4); // location
-            job.setLaborFunction(third.text());
-            job.setLocation(fourth.text());
-            System.out.println("Локация: " + job.getLocation() + ", Функция: " + job.getLaborFunction());
-        } else {
-            System.out.println("Не удалось найти достаточное количество блоков для локации и функции.");
-            job.setLaborFunction("");
-            job.setLocation("");
+        Document jobDoc;
+        try {
+            jobDoc = Jsoup.connect(jobPageUrl)
+                    .userAgent("Mozilla/5.0")
+                    .timeout(15_000)
+                    .get();
+        } catch (Exception e) {
+            System.out.println("Ошибка загрузки страницы: " + jobPageUrl);
+            e.printStackTrace();
+            return null;
         }
 
-        // 7 posted date
-        Element postedDate = jobDoc.selectFirst("div[class=gRXpLa]");
-        if (postedDate != null) {
-            String postedText = postedDate.text();
-            String dateStr = postedText.replace("Posted on ", "").trim();
+        try {
+            // 1 position name
+            Element name = jobDoc.selectFirst("h2.jqWDOR");
+            job.setPositionName(name != null ? name.text() : "Unknown Position");
+            //System.err.println("position name: " + job.getPositionName());
 
-            try {
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM d, yyyy", java.util.Locale.ENGLISH);
-                LocalDate localDate = LocalDate.parse(dateStr, formatter);
-                long timestamp = localDate.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-                job.setPostedDate(timestamp);
-            } catch (Exception e) {
-                job.setPostedDate(System.currentTimeMillis());
+            // 2 url to organization
+            Element orgLink = jobDoc.selectFirst("a.bpnNuw");
+            // 4 organization title
+            Element title = jobDoc.selectFirst("p.sc-beqWaB.bpXRKw");
+            if (orgLink != null) {
+                String href = orgLink.attr("href");
+                job.setOrganizationUrl((href != null && !href.isEmpty()) ? (href.startsWith("http") ? href : BASE_URL + href) : "");
+                job.setOrganizationTitle((title != null) ? title.text() : "Unknown Organization");
+            } else {
+                job.setOrganizationTitle("");
+                job.setOrganizationUrl("");
             }
-        } else {
-            job.setPostedDate(System.currentTimeMillis());
+            //System.err.println("organization url: " + job.getOrganizationUrl());
+            //System.err.println("organization title: " + job.getOrganizationTitle());
+
+            // 3 logo
+            Element logo = jobDoc.selectFirst("img.sc-dmqHEX.eTCoCQ");
+            job.setLogoUrl(logo != null ? logo.attr("src") : "");
+            //System.err.println("logo: " + job.getLogoUrl());
+
+            // 5 labor functions
+            List<String> keywords = List.of(
+                    "Accounting & Finance", "Administration", "Compliance / Regulatory", "Customer Service",
+                    "Data Science", "Design", "IT", "Legal", "Marketing & Communications", "Operations",
+                    "Other Engineering", "People & HR", "Product", "Quality Assurance",
+                    "Sales & Business Development", "Software Engineering"
+            );
+            List<WebElement> blocks = driver.findElements(By.cssSelector("div.sc-beqWaB.sc-gueYoa.dmdAKU.MYFxR"));
+            for (WebElement block : blocks) {
+                String[] lines = block.getText().trim().split("\n");
+                String directionLine = null;
+                for (String line : lines) {
+                    for (String keyword : keywords) {
+                        if (line.contains(keyword)) {
+                            directionLine = line;
+                            break;
+                        }
+                    }
+                    if (directionLine != null) break;
+                }
+                if (directionLine != null) {
+//                    System.out.println("=== НАЙДЕНО НАПРАВЛЕНИЕ ===");
+//                    System.out.println(directionLine);
+//                    System.out.println("===========================");
+                    job.setLaborFunction(directionLine);
+                }
+            }
+
+            // 6 address
+            List<String> knownLocations = List.of(
+                    "United States", "USA", "Canada", "United Kingdom", "UK", "Germany", "France",
+                    "Luxembourg", "Spain", "Italy", "Netherlands", "Belgium", "Sweden", "Norway", "Denmark",
+                    "Finland", "Poland", "Czech Republic", "Slovakia", "Hungary", "Austria",
+                    "Switzerland", "Ireland", "Portugal", "Greece", "Turkey", "Russia", "Ukraine",
+                    "China", "India", "Japan", "South Korea", "Australia", "New Zealand",
+                    "Brazil", "Mexico", "Argentina", "Chile", "South Africa",
+                    "Europe", "Asia", "North America", "South America", "Multiple locations"
+            );
+            blocks.clear();
+            blocks = driver.findElements(By.cssSelector("div.sc-beqWaB.sc-gueYoa.dmdAKU.MYFxR"));
+            String location = null;
+            for (WebElement block : blocks) {
+                String[] lines = block.getText().trim().split("\n");
+                for (String line : lines) {
+                    for (String keyword : knownLocations) {
+                        if (line.contains(keyword)) {
+                            location = line;
+                            break;
+                        }
+                    }
+                    if (location != null) break;
+                }
+                if (location != null) break;
+            }
+
+            if (location != null) {
+//                System.out.println("=== НАЙДЕНА ЛОКАЦИЯ ===");
+//                System.out.println(location);
+//                System.out.println("=======================");
+                job.setLocation(location);
+            } else {
+                //System.out.println("Локация не найдена");
+            }
+
+
+            // 7 posted date
+            Element postedDateElement = jobDoc.selectFirst("div.sc-beqWaB.gRXpLa");
+            if (postedDateElement != null) {
+                String postedDateText = postedDateElement.text();
+                String dateString = postedDateText.replace("Posted on ", "").trim();
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
+                LocalDate localDate = LocalDate.parse(dateString, formatter);
+                Date date = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant());
+
+                job.setPostedDate(date);
+            } else {
+                job.setPostedDate(new Date());
+            }
+            //System.out.println("Date from timestamp: " + job.getPostedDate());
+
+            // 8 description
+            Element desc = jobDoc.selectFirst("div.sc-beqWaB.fmCCHr");
+            String descriptionText = desc != null ? desc.text() : null;
+            //System.out.println("Parsed description: " + descriptionText);
+            job.setDescription(descriptionText);
+        } catch (Exception ex) {
+            System.out.println("Ошибка при парсинге страницы вакансии: " + jobPageUrl);
+            ex.printStackTrace();
+            return null;
         }
-        System.out.println("Дата публикации: " + job.getPostedDate());
-
-
-        // 8 description
-        Element desc = jobDoc.selectFirst("div[data-testid=careerPage]");
-        job.setDescription(desc != null ? desc.html() : "");
-        System.out.println("Описание вакансии: " + desc);
 
         return job;
     }
