@@ -21,4 +21,7 @@ public class ListPage {
 
     @Column(name = "tags")
     private String tags;
+
+    @Column(name = "jobPageUrl", unique = true)
+    private String jobPageUrl;
 }

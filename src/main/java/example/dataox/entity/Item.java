@@ -15,7 +15,7 @@ public class Item {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "jobPageUrl")
+    @Column(name = "jobPageUrl", unique = true)
     private String jobPageUrl;
 
     @Column(name = "positionName")
