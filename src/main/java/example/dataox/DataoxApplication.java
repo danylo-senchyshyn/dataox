@@ -1,6 +1,6 @@
 package example.dataox;
 
-import example.dataox.service.JobScraperService;
+import example.dataox.service.ItemScraperService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -13,7 +13,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DataoxApplication implements CommandLineRunner {
 
-    private final JobScraperService jobScraperService;
+    private final ItemScraperService itemScraperService;
 
     public static void main(String[] args) {
         SpringApplication.run(DataoxApplication.class, args);
@@ -40,6 +40,6 @@ public class DataoxApplication implements CommandLineRunner {
         jobFunctionUrls.put("Sales & Business Development", "https://jobs.techstars.com/jobs?filter=eyJqb2JfZnVuY3Rpb25zIjpbIlNhbGVzJTIwJTI2JTIwQnVzaW5lc3MlMjBEZXZlbG9wbWVudCJdfQ%3D%3D");
         jobFunctionUrls.put("Software Engineering", "https://jobs.techstars.com/jobs?filter=eyJqb2JfZnVuY3Rpb25zIjpbIlNvZnR3YXJlJTIwRW5naW5lZXJpbmciXX0%3D");
 
-        jobScraperService.scrapeAllJobs(jobFunctionUrls);
+        itemScraperService.scrapeAllJobs(jobFunctionUrls);
     }
 }

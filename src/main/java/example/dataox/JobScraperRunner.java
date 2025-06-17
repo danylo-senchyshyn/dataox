@@ -1,6 +1,7 @@
 package example.dataox;
 
-import example.dataox.service.JobScraperService;
+import example.dataox.service.ItemScraperService;
+import example.dataox.service.ListPageScraperService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -11,10 +12,10 @@ import java.util.Map;
 @Component
 public class JobScraperRunner implements CommandLineRunner {
 
-    private final JobScraperService jobScraperService;
+    private final ListPageScraperService listPageScraperService;
 
-    public JobScraperRunner(JobScraperService jobScraperService) {
-        this.jobScraperService = jobScraperService;
+    public JobScraperRunner(ListPageScraperService listPageScraperService) {
+        this.listPageScraperService = listPageScraperService;
     }
 
     @Override
@@ -38,6 +39,6 @@ public class JobScraperRunner implements CommandLineRunner {
         jobFunctionUrls.put("Sales & Business Development", "https://jobs.techstars.com/jobs?filter=eyJqb2JfZnVuY3Rpb25zIjpbIlNhbGVzJTIwJTI2JTIwQnVzaW5lc3MlMjBEZXZlbG9wbWVudCJdfQ%3D%3D");
         jobFunctionUrls.put("Software Engineering", "https://jobs.techstars.com/jobs?filter=eyJqb2JfZnVuY3Rpb25zIjpbIlNvZnR3YXJlJTIwRW5naW5lZXJpbmciXX0%3D");
 
-        jobScraperService.scrapeAllJobs(jobFunctionUrls);
+        listPageScraperService.scrapeAllJobs(jobFunctionUrls);
     }
 }
