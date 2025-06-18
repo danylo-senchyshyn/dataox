@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Service;
@@ -47,7 +48,13 @@ public class ListPageScraperService {
     }
 
     public void processByJobFunction(String url, String jobFunction) {
-        WebDriver driver = new ChromeDriver();
+        ChromeOptions options = new ChromeOptions();
+        options.addArguments("--user-data-dir=/tmp/chrome-profile-" + System.currentTimeMillis());
+
+        options.addArguments("--headless=new"); // или просто "--headless"
+        options.addArguments("--disable-gpu"); // на всякий случай
+
+        WebDriver driver = new ChromeDriver(options);
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         try {
             driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(5));
