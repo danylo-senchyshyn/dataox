@@ -1,10 +1,13 @@
 package example.dataox.service.scraper;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import example.dataox.entity.ListPage;
 import example.dataox.repository.ItemRepository;
 import example.dataox.repository.ListPageRepository;
 import example.dataox.service.save.ListPageSaveService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -12,12 +15,17 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ListPageScraperService {
@@ -39,41 +47,6 @@ public class ListPageScraperService {
         }
     }
 
-    public int getExpectedJobCountFromListPage(String url) {
-        WebDriver driver = new ChromeDriver();
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        int count = 0;
-        try {
-            driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(5));
-            driver.get(url);
-
-            try {
-                WebElement acceptCookiesButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("onetrust-accept-btn-handler")));
-                Thread.sleep(1000);
-                acceptCookiesButton.click();
-                wait.until(ExpectedConditions.invisibilityOf(acceptCookiesButton));
-            } catch (TimeoutException ignored) {
-            }
-
-            try {
-                WebElement showingJobsElement = driver.findElement(By.cssSelector("div.sc-beqWaB.eJrfpP"));
-                String showingText = showingJobsElement.getText();
-                Matcher matcher = Pattern.compile("(\\d+)\\s+jobs").matcher(showingText);
-                if (matcher.find()) {
-                    count = Integer.parseInt(matcher.group(1));
-                }
-            } catch (NoSuchElementException e) {
-                System.out.println("Не удалось получить количество вакансий");
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            driver.quit();
-        }
-        return count;
-    }
-
     public void processByJobFunction(String url, String jobFunction) {
         WebDriver driver = new ChromeDriver();
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
@@ -81,42 +54,25 @@ public class ListPageScraperService {
             driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(5));
             driver.get(url);
 
-            // Куки через wait
             acceptCookies(wait);
 
-            // Получаем количество вакансий
-            int expectedJobCount = 0;
-            try {
-                WebElement showingJobsElement = driver.findElement(By.cssSelector("div.sc-beqWaB.eJrfpP"));
-                String showingText = showingJobsElement.getText();
-                Matcher matcher = Pattern.compile("(\\d+)\\s+jobs").matcher(showingText);
-                if (matcher.find()) {
-                    expectedJobCount = Integer.parseInt(matcher.group(1));
-                    System.out.println("Ожидаемое количество вакансий: " + expectedJobCount);
-                }
-            } catch (NoSuchElementException e) {
-                System.out.println("Не удалось получить количество вакансий");
-            }
+            // Определяем ожидаемое количество вакансий
+            int expectedJobCount = extractExpectedJobCount(driver);
 
-            // Загружаем все вакансии
+            // Загружаем все вакансии на странице
             loadAllJobs(driver, wait, expectedJobCount);
 
-            // Получаем список вакансий
             List<WebElement> jobCards = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']"));
-            boolean countSaved = false;
+            int savedCount = 0;
 
             for (WebElement jobCard : jobCards) {
                 try {
                     WebElement link = jobCard.findElement(By.cssSelector("a[data-testid='job-title-link']"));
                     String jobUrl = link.getAttribute("href");
-                    if (jobUrl != null && !jobUrl.isEmpty()) {
-                        ListPage listPage = new ListPage();
-                        listPage.setJobFunction(jobFunction);
-                        listPage.setJobPageUrl(jobUrl);
 
-                        if (!countSaved) {
-                            listPage.setNumberOfFilteredJobs(expectedJobCount == 0 ? jobCards.size() : expectedJobCount);
-                            countSaved = true;
+                    if (jobUrl != null && !jobUrl.isEmpty()) {
+                        if (listPageRepository.existsByJobPageUrlAndJobFunction(jobUrl, jobFunction)) {
+                            continue;
                         }
 
                         List<String> tagTexts = jobCard.findElements(By.cssSelector("div.sc-beqWaB.sc-gueYoa.jIjsZd.MYFxR")).stream()
@@ -125,21 +81,45 @@ public class ListPageScraperService {
                                 .filter(text -> !text.isEmpty())
                                 .collect(Collectors.toList());
 
+                        ListPage listPage = new ListPage();
+                        listPage.setJobFunction(jobFunction);
+                        listPage.setJobPageUrl(jobUrl);
+                        listPage.setNumberOfFilteredJobs(expectedJobCount == 0 ? jobCards.size() : expectedJobCount);
                         listPage.setTags(String.join(", ", tagTexts));
+
                         listPageSaveService.saveItem(listPage);
-                        System.out.println("Сохранено: " + jobUrl);
+                        savedCount++;
+                        log.info("Сохранена вакансия: {}", jobUrl);
                     }
-                } catch (NoSuchElementException ignored) {
+                } catch (NoSuchElementException e) {
+                    log.warn("Не удалось найти ссылку на вакансию в карточке", e);
                 }
             }
-            System.err.println("Обработано " + jobCards.size() + " из " + expectedJobCount + " вакансий для функции: " + jobFunction);
-            listPageRepository.updateNumberOfFilteredJobsByJobFunction(jobFunction, expectedJobCount == 0 ? jobCards.size() : expectedJobCount);
+
+            int totalJobs = expectedJobCount == 0 ? jobCards.size() : expectedJobCount;
+            listPageRepository.updateNumberOfFilteredJobsByJobFunction(jobFunction, totalJobs);
             listPageRepository.flush();
+
+            log.info("Обработано {} вакансий, сохранено {} для направления: {}", jobCards.size(), savedCount, jobFunction);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Ошибка при обработке направления: " + jobFunction, e);
         } finally {
             driver.quit();
         }
+    }
+
+    private int extractExpectedJobCount(WebDriver driver) {
+        try {
+            WebElement showingJobsElement = driver.findElement(By.cssSelector("div.sc-beqWaB.eJrfpP"));
+            String showingText = showingJobsElement.getText();
+            Matcher matcher = Pattern.compile("(\\d+)\\s+jobs").matcher(showingText);
+            if (matcher.find()) {
+                return Integer.parseInt(matcher.group(1));
+            }
+        } catch (NoSuchElementException e) {
+            log.warn("Не удалось получить количество вакансий", e);
+        }
+        return 0;
     }
 
     private void acceptCookies(WebDriverWait wait) {
@@ -212,5 +192,25 @@ public class ListPageScraperService {
             }
             System.err.println("Текущее количество вакансий: " + currentCount + ", ожидаемое: " + expectedJobCount);
         }
+    }
+
+    public static JsonNode fetchJobsFromApi(String jobFunction) throws Exception {
+        String url = "https://api.getro.com/api/v2/collections/89/search/jobs";
+        String jsonBody = String.format("{\"job_functions\": [\"%s\"]}", jobFunction);
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .header("Origin", "https://jobs.techstars.com")
+                .header("Referer", "https://jobs.techstars.com")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(response.body());
+        return root.get("jobs");
     }
 }

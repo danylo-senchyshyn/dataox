@@ -12,10 +12,7 @@ import java.util.Optional;
 
 @Repository
 public interface ListPageRepository extends JpaRepository<ListPage, Long> {
-    Optional<ListPage> findByJobPageUrl(String jobPageUrl);
-    boolean existsByJobPageUrl(String jobPageUrl);
-    int countByJobFunction(String jobFunction);
-
+    boolean existsByJobPageUrlAndJobFunction(String jobPageUrl, String jobFunction);
     @Modifying
     @Transactional
     @Query("UPDATE ListPage lp SET lp.numberOfFilteredJobs = :count WHERE lp.jobFunction = :jobFunction")

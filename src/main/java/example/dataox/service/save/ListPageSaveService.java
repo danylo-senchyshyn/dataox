@@ -16,11 +16,16 @@ public class ListPageSaveService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void saveItem(ListPage listPage) {
-        if (!listPageRepository.existsByJobPageUrl(listPage.getJobPageUrl())) {
+        boolean exists = listPageRepository.existsByJobPageUrlAndJobFunction(
+                listPage.getJobPageUrl(), listPage.getJobFunction());
+
+        if (!exists) {
             listPageRepository.save(listPage);
+            log.info("Сохранена новая запись ListPage: url = {}, jobFunction = {}",
+                    listPage.getJobPageUrl(), listPage.getJobFunction());
         } else {
-            log.warn("Duplicate jobPageUrl found (skipped): {}", listPage.getJobPageUrl());
+            log.info("Запись ListPage с url = {} и jobFunction = {} уже существует, пропускаем сохранение",
+                    listPage.getJobPageUrl(), listPage.getJobFunction());
         }
     }
-
 }

@@ -9,6 +9,5 @@ import java.util.Optional;
 
 @Repository
 public interface ItemRepository extends JpaRepository<Item, Long> {
-    Optional<Item> findByJobPageUrl(String jobPageUrl);
-    boolean existsByJobPageUrl(String jobPageUrl);
+    boolean existsByJobPageUrlAndLaborFunction(String jobPageUrl, String laborFunction);
 }

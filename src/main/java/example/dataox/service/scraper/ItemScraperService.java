@@ -45,6 +45,13 @@ public class ItemScraperService {
 
     public void scrapeJobDetailsFromListPage() {
         List<ListPage> pages = listPageRepository.findAll();
+        List<String> validUrls = pages.stream()
+                .map(ListPage::getJobPageUrl)
+                .filter(url -> url.startsWith("https://jobs.techstars.com/companies/"))
+                .toList();
+
+        System.out.println("Всего подходящих ссылок: " + validUrls.size());
+
         ChromeOptions options = new ChromeOptions();
         options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
                 "AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -54,9 +61,8 @@ public class ItemScraperService {
         WebDriverWait wait = new WebDriverWait(driver, java.time.Duration.ofSeconds(10));
 
         try {
-            for (ListPage page : pages) {
+            for (String jobUrl : validUrls) {
                 try {
-                    String jobUrl = page.getJobPageUrl();
                     driver.get(jobUrl);
                     acceptCookies(driver);
 
@@ -64,11 +70,10 @@ public class ItemScraperService {
                     Thread.sleep(1000);
 
                     Item item = parseJobDetailPage(jobUrl, driver);
-
                     itemSaveService.saveItem(item);
                     System.out.println("Сохранена вакансия: " + item.getJobPageUrl());
                 } catch (Exception ex) {
-                    System.err.println("Ошибка при парсинге вакансии: " + page.getJobPageUrl());
+                    System.err.println("Ошибка при парсинге вакансии: " + jobUrl);
                     ex.printStackTrace();
                 }
             }
@@ -214,6 +219,7 @@ public class ItemScraperService {
 
             return item;
         } catch (Exception e) {
+            System.err.println("Ошибка при парсинге вакансии: " + jobPageUrl);
             e.printStackTrace();
             return null;
         }
