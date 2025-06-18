@@ -56,6 +56,7 @@ public class ItemScraperService {
         options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
                 "AppleWebKit/537.36 (KHTML, like Gecko) " +
                 "Chrome/114.0.0.0 Safari/537.36");
+        options.addArguments("--headless=new");
         options.addArguments("--disable-gpu", "--no-sandbox");
         WebDriver driver = new ChromeDriver(options);
         WebDriverWait wait = new WebDriverWait(driver, java.time.Duration.ofSeconds(10));

@@ -35,7 +35,6 @@ public class ListPageScraperService {
     private final ListPageSaveService listPageSaveService;
     private final ItemScraperService itemScraperService;
 
-
     public void scrapeAllJobs(Map<String, String> jobFunctionsAndUrls) {
         for (Map.Entry<String, String> entry : jobFunctionsAndUrls.entrySet()) {
             try {
