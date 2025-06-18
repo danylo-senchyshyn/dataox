@@ -65,14 +65,12 @@ public class ItemScraperService {
         options.addArguments("--no-sandbox");
         options.addArguments("--disable-dev-shm-usage");
 
-        Path tempProfileDir = null;
         try {
-            tempProfileDir = Files.createTempDirectory("chrome-profile-");
-            String uniqueProfilePath = "/tmp/chrome-profile-" + System.currentTimeMillis();
-            options.addArguments("--user-data-dir=" + uniqueProfilePath);
+            Path tempProfileDir = Files.createTempDirectory("chrome-profile-");
+            options.addArguments("--user-data-dir=" + tempProfileDir.toAbsolutePath().toString());
         } catch (IOException e) {
             System.err.println("Не удалось создать временную директорию для профиля Chrome: " + e.getMessage());
-            // Можно завершить выполнение или продолжить без пользовательского профиля
+            // Реши, как поступить — либо продолжить без профиля, либо прервать метод
         }
 
         WebDriver driver = new ChromeDriver(options);
