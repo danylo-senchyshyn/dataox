@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.openqa.selenium.*;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +27,6 @@ public class ListPageScraperService {
     private final ListPageSaveService listPageSaveService;
     private final ItemScraperService itemScraperService;
 
-    private static final String BASE_URL = "https://jobs.techstars.com";
 
     public void scrapeAllJobs(Map<String, String> jobFunctionsAndUrls) {
         for (Map.Entry<String, String> entry : jobFunctionsAndUrls.entrySet()) {
@@ -38,23 +39,50 @@ public class ListPageScraperService {
         }
     }
 
+    public int getExpectedJobCountFromListPage(String url) {
+        WebDriver driver = new ChromeDriver();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        int count = 0;
+        try {
+            driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(5));
+            driver.get(url);
+
+            try {
+                WebElement acceptCookiesButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("onetrust-accept-btn-handler")));
+                Thread.sleep(1000);
+                acceptCookiesButton.click();
+                wait.until(ExpectedConditions.invisibilityOf(acceptCookiesButton));
+            } catch (TimeoutException ignored) {
+            }
+
+            try {
+                WebElement showingJobsElement = driver.findElement(By.cssSelector("div.sc-beqWaB.eJrfpP"));
+                String showingText = showingJobsElement.getText();
+                Matcher matcher = Pattern.compile("(\\d+)\\s+jobs").matcher(showingText);
+                if (matcher.find()) {
+                    count = Integer.parseInt(matcher.group(1));
+                }
+            } catch (NoSuchElementException e) {
+                System.out.println("Не удалось получить количество вакансий");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            driver.quit();
+        }
+        return count;
+    }
+
     public void processByJobFunction(String url, String jobFunction) {
         WebDriver driver = new ChromeDriver();
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         try {
             driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(5));
             driver.get(url);
-            Thread.sleep(2000);
 
-            // Принятие куков
-            try {
-                WebElement acceptCookiesButton = driver.findElement(By.id("onetrust-accept-btn-handler"));
-                if (acceptCookiesButton.isDisplayed()) {
-                    acceptCookiesButton.click();
-                    Thread.sleep(1000);
-                }
-            } catch (NoSuchElementException ignored) {
-            }
+            // Куки через wait
+            acceptCookies(wait);
 
             // Получаем количество вакансий
             int expectedJobCount = 0;
@@ -70,11 +98,13 @@ public class ListPageScraperService {
                 System.out.println("Не удалось получить количество вакансий");
             }
 
-            int currentCount = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']")).size();
+            // Загружаем все вакансии
             loadAllJobs(driver, wait, expectedJobCount);
 
-            // Получаем список jobCards
+            // Получаем список вакансий
             List<WebElement> jobCards = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']"));
+            boolean countSaved = false;
+
             for (WebElement jobCard : jobCards) {
                 try {
                     WebElement link = jobCard.findElement(By.cssSelector("a[data-testid='job-title-link']"));
@@ -82,35 +112,46 @@ public class ListPageScraperService {
                     if (jobUrl != null && !jobUrl.isEmpty()) {
                         ListPage listPage = new ListPage();
                         listPage.setJobFunction(jobFunction);
-                        listPage.setNumberOfFilteredJobs(expectedJobCount);
                         listPage.setJobPageUrl(jobUrl);
 
-                        List<WebElement> tagDivs = jobCard.findElements(By.cssSelector("div.sc-beqWaB.sc-gueYoa.jIjsZd.MYFxR"));
-                        List<String> tagTexts = new ArrayList<>();
-                        for (WebElement tagDiv : tagDivs) {
-                            try {
-                                String text = tagDiv.getText().trim();
-                                if (!text.isEmpty()) {
-                                    tagTexts.add(text);
-                                }
-                            } catch (Exception ignored) {
-                            }
+                        if (!countSaved) {
+                            listPage.setNumberOfFilteredJobs(expectedJobCount == 0 ? jobCards.size() : expectedJobCount);
+                            countSaved = true;
                         }
-                        String tags = String.join(", ", tagTexts);
-                        listPage.setTags(tags);
 
+                        List<String> tagTexts = jobCard.findElements(By.cssSelector("div.sc-beqWaB.sc-gueYoa.jIjsZd.MYFxR")).stream()
+                                .map(WebElement::getText)
+                                .map(text -> text.replace("\n", " ").trim())
+                                .filter(text -> !text.isEmpty())
+                                .collect(Collectors.toList());
+
+                        listPage.setTags(String.join(", ", tagTexts));
                         listPageSaveService.saveItem(listPage);
                         System.out.println("Сохранено: " + jobUrl);
                     }
                 } catch (NoSuchElementException ignored) {
                 }
             }
-            System.err.println("Обработано " + jobCards.size() + " вакансий для функции: " + jobFunction);
+            System.err.println("Обработано " + jobCards.size() + " из " + expectedJobCount + " вакансий для функции: " + jobFunction);
+            listPageRepository.updateNumberOfFilteredJobsByJobFunction(jobFunction, expectedJobCount == 0 ? jobCards.size() : expectedJobCount);
             listPageRepository.flush();
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             driver.quit();
+        }
+    }
+
+    private void acceptCookies(WebDriverWait wait) {
+        try {
+            WebElement acceptCookiesButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("onetrust-accept-btn-handler")));
+            Thread.sleep(1000);
+            acceptCookiesButton.click();
+            wait.until(ExpectedConditions.invisibilityOf(acceptCookiesButton));
+        } catch (TimeoutException ignored) {
+        } catch (InterruptedException e) {
+            System.out.println("Cookie banner accepted");
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -123,27 +164,53 @@ public class ListPageScraperService {
             try {
                 WebElement loadMoreButton = driver.findElement(By.cssSelector("button[data-testid='load-more']"));
                 if (loadMoreButton.isDisplayed() && "false".equals(loadMoreButton.getAttribute("data-loading"))) {
-                    ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", loadMoreButton);
-                    loadMoreButton.click();
-                    // Ожидаем появления новых вакансий
-                    Thread.sleep(2000);
+                    for (int i = 0; i < 2; i++) {
+                        currentCount = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']")).size();
+                        if (currentCount == expectedJobCount) break;
+                        ((JavascriptExecutor) driver).executeScript("location.reload();");
 
-                    int newCount = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']")).size();
+                        loadMoreButton = driver.findElement(By.cssSelector("button[data-testid='load-more']"));
+                        if (loadMoreButton.isDisplayed()) {
+                            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", loadMoreButton);
+                            loadMoreButton.click();
+                        }
+                        for (int j = 0; j < 15; j++) {
+                            currentCount = driver.findElements(By.cssSelector("div[itemtype='https://schema.org/JobPosting']")).size();
+                            if (currentCount == expectedJobCount) break;
 
-                    // Если новых вакансий не добавилось, увеличиваем попытки, чтобы не зациклиться
+                            WebElement footer = driver.findElement(By.cssSelector(
+                                    "div.sc-beqWaB.sc-gueYoa.kVZzjT.MYFxR.powered-by-footer"));
+                            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({behavior: 'smooth'});", footer);
+                            wait.until(ExpectedConditions.invisibilityOfElementLocated(
+                                    By.cssSelector("div.sc-beqWaB.kEdPIN")
+                            ));
+                        }
+                    }
+
+                    int newCount = driver.findElements(
+                            By.cssSelector("div[itemtype='https://schema.org/JobPosting']")).size();
+
                     if (newCount <= currentCount) {
                         attempts++;
                     } else {
-                        attempts = 0; // сброс попыток, т.к. загрузились новые вакансии
+                        attempts = 0;
                     }
                     currentCount = newCount;
                 } else {
-                    break; // кнопка неактивна или загрузка идет, завершаем
+                    break;
                 }
             } catch (NoSuchElementException e) {
                 System.out.println("Кнопка 'Load more' не найдена — возможно, все вакансии загружены.");
                 break;
+            } catch (TimeoutException e) {
+                System.out.println("Превышено время ожидания загрузки новых вакансий.");
+                ((JavascriptExecutor) driver).executeScript("location.reload();");
+                attempts++;
+            } catch (StaleElementReferenceException e) {
+                System.out.println("Элемент стал неактуальным — повтор попытки.");
+                attempts++;
             }
+            System.err.println("Текущее количество вакансий: " + currentCount + ", ожидаемое: " + expectedJobCount);
         }
     }
 }

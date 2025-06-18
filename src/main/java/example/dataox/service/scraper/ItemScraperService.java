@@ -1,9 +1,7 @@
 package example.dataox.service.scraper;
 
 import example.dataox.entity.Item;
-import example.dataox.entity.ItemJobLink;
 import example.dataox.entity.ListPage;
-import example.dataox.repository.ItemJobLinkRepository;
 import example.dataox.repository.ItemRepository;
 import example.dataox.repository.ListPageRepository;
 import example.dataox.service.save.ItemSaveService;
@@ -13,6 +11,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.openqa.selenium.*;
+import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -30,8 +29,8 @@ public class ItemScraperService {
     private final ItemRepository itemRepository;
     private final ItemSaveService itemSaveService;
     private final ListPageRepository listPageRepository;
-    private final ItemJobLinkRepository itemJobLinkRepository;
     private static final String BASE_URL = "https://jobs.techstars.com";
+    private boolean isAcceptedCookies = false;
 
     public void scrapeAllJobs(Map<String, String> jobFunctionsAndUrls) {
         for (Map.Entry<String, String> entry : jobFunctionsAndUrls.entrySet()) {
@@ -59,23 +58,17 @@ public class ItemScraperService {
                 try {
                     String jobUrl = page.getJobPageUrl();
                     driver.get(jobUrl);
+                    acceptCookies(driver);
+
                     wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("h2.jqWDOR")));
                     Thread.sleep(1000);
 
                     Item item = parseJobDetailPage(jobUrl, driver);
-                    if (item != null) {
-                        itemSaveService.saveItem(item);
 
-                        ItemJobLink link = new ItemJobLink();
-                        link.setJobPageUrl(item.getJobPageUrl());
-                        link.setJobPageUrlList(page.getJobPageUrl());
-                        link.setItem(item);
-                        link.setListPage(page);
-
-                        itemJobLinkRepository.save(link);
-                    }
+                    itemSaveService.saveItem(item);
+                    System.out.println("Сохранена вакансия: " + item.getJobPageUrl());
                 } catch (Exception ex) {
-                    System.out.println("Ошибка при парсинге вакансии: " + page.getJobPageUrl());
+                    System.err.println("Ошибка при парсинге вакансии: " + page.getJobPageUrl());
                     ex.printStackTrace();
                 }
             }
@@ -154,6 +147,7 @@ public class ItemScraperService {
 
             // 6. address
             List<String> knownLocations = List.of(
+                    "Remote", "On-site", "Hybrid", "Work from home", "Work from anywhere",
                     "United States", "USA", "Canada", "United Kingdom", "UK", "Germany", "France",
                     "Luxembourg", "Spain", "Italy", "Netherlands", "Belgium", "Sweden", "Norway", "Denmark",
                     "Finland", "Poland", "Czech Republic", "Slovakia", "Hungary", "Austria",
@@ -163,23 +157,14 @@ public class ItemScraperService {
                     "Europe", "Asia", "North America", "South America", "Multiple locations"
             );
             String location = "Unknown Location";
-
             outer:
             for (Element groupBlock : jobDoc.select("div.sc-beqWaB.sc-gueYoa.dmdAKU.MYFxR")) {
-                Elements innerDivs = groupBlock.select("div.sc-beqWaB.bpXRKw");
-                StringBuilder fullLocationText = new StringBuilder();
-                for (Element div : innerDivs) {
-                    if (fullLocationText.length() > 0) {
-                        fullLocationText.append(", ");
-                    }
-                    fullLocationText.append(div.text().trim());
-                }
-                for (Element div : innerDivs) {
-                    String text = div.text();
+                for (Element div : groupBlock.select("div.sc-beqWaB.bpXRKw")) {
+                    String text = div.text().trim();
                     for (String keyword : knownLocations) {
                         if (text.contains(keyword)) {
-                            location = fullLocationText.toString();
-                            break outer;
+                            location = text;
+                            break outer;  // выход сразу из всех циклов при первом совпадении
                         }
                     }
                 }
@@ -231,6 +216,23 @@ public class ItemScraperService {
         } catch (Exception e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    private void acceptCookies(WebDriver driver) {
+        if (isAcceptedCookies) {
+            return; // Cookies already accepted
+        }
+        try {
+            Thread.sleep(2000);
+            WebElement acceptCookiesButton = driver.findElement(By.id("onetrust-accept-btn-handler"));
+            acceptCookiesButton.click();
+        } catch (TimeoutException ignored) {
+        } catch (NoSuchElementException e) {
+            System.out.println("Кнопка принятия cookies не найдена, возможно уже приняты");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.out.println("Ошибка при ожидании принятия cookies: " + e.getMessage());
         }
     }
 }

@@ -13,15 +13,15 @@ public class ListPage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "jobFunction")
+    @Column(name = "jobFunction", nullable = false)
     private String jobFunction;
 
-    @Column(name = "numberOfFilteredJobs")
+    @Column(name = "numberOfFilteredJobs", nullable = false)
     private Integer numberOfFilteredJobs;
 
     @Column(name = "tags")
     private String tags;
 
-    @Column(name = "jobPageUrl", unique = true, nullable = false)
+    @Column(name = "jobPageUrl", nullable = false)
     private String jobPageUrl;
 }

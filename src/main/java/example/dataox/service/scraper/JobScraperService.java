@@ -12,7 +12,7 @@ public class JobScraperService {
     private final ItemScraperService itemScraperService;
 
     public void scrapeAll(Map<String, String> jobFunctionUrls) {
-        //listPageScraperService.scrapeAllJobs(jobFunctionUrls);
+        listPageScraperService.scrapeAllJobs(jobFunctionUrls);
         itemScraperService.scrapeAllJobs(jobFunctionUrls);
     }
 }
