@@ -38,19 +38,19 @@ This configuration ensures that the application connects to your database and up
 
 After configuring the database, follow these steps to build and run the application:
 
-	1.	Clone the project repository to your local machine and navigate into the project folder.
+	1. Clone the project repository to your local machine and navigate into the project folder.
  
-	2.	Use Maven to build the project and download all necessary dependencies:
+	2. Use Maven to build the project and download all necessary dependencies:
  
-	3.	Run the application either through Maven:
+	3. Run the application either through Maven:
+ ```bash
+mvn spring-boot:run
+```
+ or by executing the generated JAR file:
  
-      	```bash
-	mvn spring-boot:run
-	```
- 	 or by executing the generated JAR file:
-      	```bash
-	java -jar target/dataox-job-scraper.jar
- 	```
+```bash
+java -jar target/dataox-job-scraper.jar
+```
   
 Once the application starts, it will be available at http://localhost:8080. 
 
