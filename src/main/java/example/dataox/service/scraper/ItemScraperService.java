@@ -18,6 +18,10 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -57,7 +61,19 @@ public class ItemScraperService {
                 "AppleWebKit/537.36 (KHTML, like Gecko) " +
                 "Chrome/114.0.0.0 Safari/537.36");
         options.addArguments("--headless=new");
-        options.addArguments("--disable-gpu", "--no-sandbox");
+        options.addArguments("--disable-gpu");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+
+        Path tempProfileDir = null;
+        try {
+            tempProfileDir = Files.createTempDirectory("chrome-profile-");
+            options.addArguments("--user-data-dir=" + tempProfileDir.toString());
+        } catch (IOException e) {
+            System.err.println("Не удалось создать временную директорию для профиля Chrome: " + e.getMessage());
+            // Можно завершить выполнение или продолжить без пользовательского профиля
+        }
+
         WebDriver driver = new ChromeDriver(options);
         WebDriverWait wait = new WebDriverWait(driver, java.time.Duration.ofSeconds(10));
 
@@ -81,6 +97,16 @@ public class ItemScraperService {
             itemRepository.flush();
         } finally {
             driver.quit();
+            if (tempProfileDir != null) {
+                try {
+                    Files.walk(tempProfileDir)
+                            .sorted(Comparator.reverseOrder())
+                            .map(Path::toFile)
+                            .forEach(File::delete);
+                } catch (IOException e) {
+                    System.err.println("Не удалось удалить временную директорию: " + e.getMessage());
+                }
+            }
         }
     }
 
