@@ -68,7 +68,8 @@ public class ItemScraperService {
         Path tempProfileDir = null;
         try {
             tempProfileDir = Files.createTempDirectory("chrome-profile-");
-            options.addArguments("--user-data-dir=" + tempProfileDir.toString());
+            String uniqueProfilePath = "/tmp/chrome-profile-" + System.currentTimeMillis();
+            options.addArguments("--user-data-dir=" + uniqueProfilePath);
         } catch (IOException e) {
             System.err.println("Не удалось создать временную директорию для профиля Chrome: " + e.getMessage());
             // Можно завершить выполнение или продолжить без пользовательского профиля
