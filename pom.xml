@@ -109,6 +109,15 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.0.0-M8</version>
             </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <configuration>
+                    <mainClass>com.example.dataox.DataoxApplication</mainClass>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
