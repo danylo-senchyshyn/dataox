@@ -9,13 +9,13 @@ import java.util.Date;
 @Getter
 @Setter
 @Entity
-@Table(name = "Item")
+@Table(name = "item")
 public class Item {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "jobPageUrl", unique = true)
+    @Column(name = "jobPageUrl", unique = true, nullable = false)
     private String jobPageUrl;
 
     @Column(name = "positionName")

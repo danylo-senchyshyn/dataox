@@ -7,7 +7,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "ListPage")
+@Table(name = "listpage")
 public class ListPage {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,6 +22,6 @@ public class ListPage {
     @Column(name = "tags")
     private String tags;
 
-    @Column(name = "jobPageUrl", unique = true)
+    @Column(name = "jobPageUrl", unique = true, nullable = false)
     private String jobPageUrl;
 }

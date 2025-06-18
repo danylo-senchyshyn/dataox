@@ -1,4 +1,4 @@
-package example.dataox.service;
+package example.dataox.service.scraper;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

@@ -1,10 +1,9 @@
-package example.dataox.service;
+package example.dataox.service.save;
 
 import example.dataox.entity.ListPage;
 import example.dataox.repository.ListPageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;

@@ -1,9 +1,6 @@
 package example.dataox;
 
-import example.dataox.service.ItemScraperService;
-import example.dataox.service.JobScraperService;
-import example.dataox.service.ListPageSaveService;
-import example.dataox.service.ListPageScraperService;
+import example.dataox.service.scraper.JobScraperService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
