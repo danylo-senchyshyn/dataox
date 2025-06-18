@@ -115,7 +115,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.1.0</version>
                 <configuration>
-                    <mainClass>com.example.dataox.DataoxApplication</mainClass>
+                    <mainClass>example.dataox.DataoxApplication</mainClass>
                 </configuration>
             </plugin>
         </plugins>
