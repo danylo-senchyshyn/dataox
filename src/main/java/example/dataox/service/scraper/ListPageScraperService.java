@@ -194,9 +194,13 @@ public class ListPageScraperService {
         }
     }
 
-    public static JsonNode fetchJobsFromApi(String jobFunction) throws Exception {
+    public static JsonNode fetchJobsFromApi(String jobFunction, int limit, int page) throws Exception {
         String url = "https://api.getro.com/api/v2/collections/89/search/jobs";
-        String jsonBody = String.format("{\"job_functions\": [\"%s\"]}", jobFunction);
+
+        String jsonBody = String.format(
+                "{ \"hitsPerPage\": %d, \"page\": %d, \"filters\": { \"job_functions\": [\"%s\"] }, \"query\": \"\" }",
+                limit, page, jobFunction
+        );
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
@@ -208,9 +212,19 @@ public class ListPageScraperService {
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        String responseBody = response.body();
+
+        System.out.println("Ответ API: " + responseBody);
 
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode root = mapper.readTree(response.body());
-        return root.get("jobs");
+        JsonNode root = mapper.readTree(responseBody);
+
+        if (root.has("jobs")) {
+            return root.get("jobs");
+        } else {
+            System.err.println("В ответе API отсутствует поле 'jobs'");
+            System.err.println("Полный ответ:\n" + root.toPrettyString());
+            return null;
+        }
     }
 }
