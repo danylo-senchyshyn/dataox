@@ -1,19 +1,19 @@
 # 📌 Job Scraper
 
-**Job Scraper** — это Java-приложение на Spring Boot для автоматического сбора и сохранения вакансий с сайта [Techstars](https://www.techstars.com/).
+**Job Scraper** is a Java application built with Spring Boot for automatically scraping and storing job listings from the [Techstars](https://www.techstars.com/) website.
 
 ---
 
-## 🚀 Возможности
+## 🚀 Features
 
-- Получение вакансий по индустриям через API
-- Парсинг HTML-страниц с помощью **Jsoup**
-- Сохранение информации о вакансиях и компаниях в базу данных
-- Гибкая настройка конфигурации через `application.properties`
+- Retrieve job listings by industry via API
+- Parse HTML pages using **Jsoup**
+- Save job and company data to the database
+- Flexible configuration via `application.properties`
 
 ---
 
-## 🛠️ Технологии
+## 🛠️ Technologies
 
 - Java 17+
 - Spring Boot
@@ -24,7 +24,7 @@
 
 ---
 
-## 📂 Структура проекта
+## 📂 Project Structure
 
 ```bash
 src/
@@ -32,77 +32,77 @@ src/
 │   ├── java/
 │   │   └── com/
 │   │       └── jobscraper/
-│   │           ├── controller/      # Контроллеры и модели ответов API
-│   │           ├── entity/          # Сущности для хранения данных
-│   │           ├── repository/      # Репозитории Spring Data
-│   │           └── services/        # Бизнес-логика и парсинг данных
+│   │           ├── controller/      # API controllers and response models
+│   │           ├── entity/          # Data entities
+│   │           ├── repository/      # Spring Data repositories
+│   │           └── services/        # Business logic and data parsing
 │   └── resources/
-│       └── application.properties   # Конфигурация приложения
+│       └── application.properties   # Application configuration
 ```
 
 ---
 
-## ▶️ Запуск
+## ▶️ Getting Started
 
-1. Установите зависимости:
+1. Install dependencies:
    ```bash
    mvn clean install
    ```
 
-2. Настройте параметры подключения к базе данных:
+2. Configure database connection:
    ```
    src/main/resources/application.properties
    ```
 
-3. Запустите приложение:
+3. Run the application:
    ```bash
    mvn spring-boot:run
    ```
 
 ---
 
-## 📘 Использование
+## 📘 Usage
 
-Основной сервис: `JobDataService`  
-Реализует бизнес-логику парсинга и сохранения вакансий с сайта **Techstars**.
+Main service: `JobDataService`  
+Implements the business logic for parsing and storing job listings from **Techstars**.
 
-### 🔧 Основные методы:
+### 🔧 Key Methods:
 
 - `fetchAndSaveAllListPages()`  
-  Перебирает все индустрии, загружает и сохраняет вакансии постранично.
+  Iterates through all industries, loads and saves paginated job listings.
 
 - `fetchAndSaveListPagesByIndustryAndPage(industry, page)`  
-  Загружает и сохраняет вакансии для выбранной индустрии и страницы.
+  Loads and saves jobs for a specific industry and page.
 
 - `createHeaders(refererIndustry)`  
-  Формирует HTTP-заголовки для API-запросов.
+  Builds HTTP headers for API requests.
 
 - `getTags(organization, job)`  
-  Собирает теги: индустрия, размер компании, стадия, seniority.
+  Gathers tags such as industry, company size, stage, and seniority.
 
 - `formatTag(tag)`  
-  Форматирует строку-тег, делая её читабельной.
+  Formats tags into human-readable strings.
 
 - `jobFunctionUrls()`  
-  Возвращает карту индустрий и соответствующих URL для поиска вакансий.
+  Returns a map of industries and their corresponding job listing URLs.
 
 - `laborFunctions()`  
-  Возвращает список всех поддерживаемых функций труда.
+  Returns a list of all supported job functions.
 
 ---
 
-## 💾 Хранение данных
+## 💾 Data Persistence
 
-Вакансии (`Item`) и страницы списков вакансий (`ListPage`) сохраняются в базу данных через репозитории:
+Jobs (`Item`) and job list pages (`ListPage`) are stored in the database via the following repositories:
 
 - `ItemRepository`
 - `ListPageRepository`
 
 ---
 
-## 🏁 Запуск сбора вакансий
+## 🏁 Start Scraping
 
-Для запуска основного процесса сбора используйте:
+To start scraping job listings, use:
 
 ```java
 jobDataService.fetchAndSaveAllListPages();
